@@ -1,6 +1,6 @@
 /*
-Copyright (C) 2006 - 2014 Evan Teran
-                          eteran@alum.rit.edu
+Copyright (C) 2006 - 2015 Evan Teran
+                          evan.teran@gmail.com
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,8 +17,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "Configuration.h"
-#include "Formatter.h"
 #include "edb.h"
+#include <QCoreApplication>
+#include <QDesktopServices>
 #include <QtDebug>
 #include <QSettings>
 #include <QDir>
@@ -61,7 +62,11 @@ void Configuration::read_settings() {
 #ifdef DEFAULT_PLUGIN_PATH
 	const QString default_plugin_path = TOSTRING(DEFAULT_PLUGIN_PATH);
 #else
-	const QString default_plugin_path = QDir().absolutePath();
+	const QString edb_lib_dir=QCoreApplication::applicationDirPath()+(EDB_IS_64_BIT ? "/../lib64/edb" : "/../lib/edb");
+	const QString edb_binary_dir=QCoreApplication::applicationDirPath();
+	// If the binary is in its installation directory, then look for plugins in their installation directory
+	// Otherwise assume that we are in build directory, so the plugins are in the same directory as the binary
+	const QString default_plugin_path = QRegExp(".*/bin/?$").exactMatch(edb_binary_dir) ? edb_lib_dir : edb_binary_dir;
 #endif
 
 	QSettings settings;
@@ -81,16 +86,17 @@ void Configuration::read_settings() {
 	data_show_comments     = settings.value("appearance.data.show_comments.enabled", true).value<bool>();
 	data_word_width        = settings.value("appearance.data.word_width", 1).value<int>();
 	data_row_width         = settings.value("appearance.data.row_width", 16).value<int>();
-	show_address_separator = settings.value("appearance.address_semicolon.enabled", true).value<bool>();
+	show_address_separator = settings.value("appearance.address_colon.enabled", true).value<bool>();
 	settings.endGroup();
 
 	settings.beginGroup("Debugging");
-	initial_breakpoint = static_cast<InitialBreakpoint>(settings.value("debugger.initial_breakpoint", MainSymbol).value<uint>());
-	warn_on_no_exec_bp = settings.value("debugger.BP_NX_warn.enabled", true).value<bool>();
-	find_main          = settings.value("debugger.find_main.enabled", true).value<bool>();
-	min_string_length  = settings.value("debugger.string_min", 4).value<uint>();
-	tty_enabled        = settings.value("debugger.terminal.enabled", true).value<bool>();
-	tty_command        = settings.value("debugger.terminal.command", "/usr/bin/xterm").value<QString>();
+	initial_breakpoint   = static_cast<InitialBreakpoint>(settings.value("debugger.initial_breakpoint", MainSymbol).value<uint>());
+	warn_on_no_exec_bp   = settings.value("debugger.BP_NX_warn.enabled", true).value<bool>();
+	find_main            = settings.value("debugger.find_main.enabled", true).value<bool>();
+	min_string_length    = settings.value("debugger.string_min", 4).value<uint>();
+	tty_enabled          = settings.value("debugger.terminal.enabled", true).value<bool>();
+	tty_command          = settings.value("debugger.terminal.command", "/usr/bin/xterm").value<QString>();
+	remove_stale_symbols = settings.value("debugger.remove_stale_symbols.enabled", true).value<bool>();
 	settings.endGroup();
 
 	settings.beginGroup("Disassembly");
@@ -101,9 +107,20 @@ void Configuration::read_settings() {
 	settings.endGroup();
 
 	settings.beginGroup("Directories");
-	symbol_path  = settings.value("directory.symbol.path", QString()).value<QString>();
+#if QT_VERSION >= 0x050000
+	QStringList cacheDirectories = QStandardPaths::standardLocations(QStandardPaths::CacheLocation);
+	QString cacheDirectory = !cacheDirectories.isEmpty() ? cacheDirectories[0] : QString();
+#else
+	QString cacheDirectory = QDesktopServices::storageLocation(QDesktopServices::CacheLocation);
+#endif
+	QString defaultSymbolPath = QString("%1/%2").arg(cacheDirectory, "symbols");
+	symbol_path  = settings.value("directory.symbol.path", defaultSymbolPath).value<QString>();
 	plugin_path  = settings.value("directory.plugin.path", default_plugin_path).value<QString>();
-	session_path = settings.value("directory.session.path", QString()).value<QString>();
+	session_path = settings.value("directory.session.path", QString()).value<QString>();	
+	settings.endGroup();
+
+	settings.beginGroup("Exceptions");
+	enable_signals_message_box=settings.value("signals.show_message_box.enabled", true).value<bool>();
 	settings.endGroup();
 
 	// normalize values
@@ -115,9 +132,12 @@ void Configuration::read_settings() {
 		data_row_width = 16;
 	}
 	
-	edisassm::FormatOptions options = edb::v1::formatter().options();
-	options.capitalization = uppercase_disassembly ? edisassm::UpperCase : edisassm::LowerCase;
-	options.smallNumFormat = small_int_as_decimal  ? edisassm::SmallNumAsDec : edisassm::SmallNumAsHex;
+	// Init capstone to some default settings
+	CapstoneEDB::init(EDB_IS_64_BIT);
+	CapstoneEDB::Formatter::FormatOptions options = edb::v1::formatter().options();
+	options.capitalization = uppercase_disassembly ? CapstoneEDB::Formatter::UpperCase : CapstoneEDB::Formatter::LowerCase;
+	options.smallNumFormat = small_int_as_decimal  ? CapstoneEDB::Formatter::SmallNumAsDec : CapstoneEDB::Formatter::SmallNumAsHex;
+	options.syntax=static_cast<CapstoneEDB::Formatter::Syntax>(syntax);
 	edb::v1::formatter().setOptions(options);	
 }
 
@@ -144,7 +164,7 @@ void Configuration::write_settings() {
 	settings.setValue("appearance.data.show_comments.enabled", data_show_comments);
 	settings.setValue("appearance.data.word_width", data_word_width);
 	settings.setValue("appearance.data.row_width", data_row_width);
-	settings.setValue("appearance.address_semicolon.enabled", show_address_separator);
+	settings.setValue("appearance.address_colon.enabled", show_address_separator);
 	settings.endGroup();
 
 	settings.beginGroup("Debugging");
@@ -154,6 +174,7 @@ void Configuration::write_settings() {
 	settings.setValue("debugger.find_main.enabled", find_main);
 	settings.setValue("debugger.terminal.enabled", tty_enabled);
 	settings.setValue("debugger.terminal.command", tty_command);
+	settings.setValue("debugger.remove_stale_symbols.enabled", remove_stale_symbols);
 	settings.endGroup();
 
 	settings.beginGroup("Disassembly");
@@ -167,5 +188,9 @@ void Configuration::write_settings() {
 	settings.setValue("directory.symbol.path", symbol_path);
 	settings.setValue("directory.plugin.path", plugin_path);
 	settings.setValue("directory.session.path", session_path);
+	settings.endGroup();
+
+	settings.beginGroup("Exceptions");
+	settings.setValue("signals.show_message_box.enabled", enable_signals_message_box);
 	settings.endGroup();
 }

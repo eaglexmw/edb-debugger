@@ -1,6 +1,6 @@
 /*
-Copyright (C) 2006 - 2014 Evan Teran
-                          eteran@alum.rit.edu
+Copyright (C) 2006 - 2015 Evan Teran
+                          evan.teran@gmail.com
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "IRegion.h"
 #include "Types.h"
-#include "Formatter.h"
 #include <QAbstractScrollArea>
 #include <QAbstractSlider>
 #include <QCache>
@@ -60,8 +59,11 @@ public:
 	int remove_comment(edb::address_t address);
 	QString get_comment(edb::address_t address);
 	void clear_comments();
+	void setSelectedAddress(edb::address_t address);
+	QByteArray saveState() const;
+	void restoreState(const QByteArray &stateBuffer);
 
-signals:
+Q_SIGNALS:
 	void signal_updated();
 
 public Q_SLOTS:
@@ -72,7 +74,7 @@ public Q_SLOTS:
 	void setRegion(const IRegion::pointer &r);
 	void setCurrentAddress(edb::address_t address);
 	void clear();
-	void repaint();
+	void update();
 	void setShowAddressSeparator(bool value);
 
 private Q_SLOTS:
@@ -120,8 +122,9 @@ private:
 	bool                              moving_line1_;
 	bool                              moving_line2_;
 	bool                              moving_line3_;
+	bool                              selecting_address_;
 	bool                              show_address_separator_;
-	QHash<edb::address_t, QString>    *comments_;
+	QHash<edb::address_t, QString>    comments_;
 };
 
 #endif

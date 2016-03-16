@@ -1,6 +1,6 @@
 /*
-Copyright (C) 2006 - 2014 Evan Teran
-                          eteran@alum.rit.edu
+Copyright (C) 2006 - 2015 Evan Teran
+                          evan.teran@gmail.com
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -41,11 +41,12 @@ public:
 
 private:
 	virtual void private_init();
+	virtual QWidget* options_page() override;
 
 public:
 	virtual QMenu *menu(QWidget *parent = 0);
 	virtual QString extra_arguments() const;
-	virtual ArgumentStatus parse_argments(QStringList &args);
+	virtual ArgumentStatus parse_arguments(QStringList &args);
 	
 public:
 	virtual bool generate_symbol_file(const QString &filename, const QString &symbol_file);

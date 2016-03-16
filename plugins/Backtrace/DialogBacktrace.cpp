@@ -31,6 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define CALLER_COLUMN 0
 #define RETURN_COLUMN 1
 
+namespace Backtrace {
+
 //------------------------------------------------------------------------------
 // Name: DialogBacktrace
 // Desc: Initializes the Dialog with its QTableWidget.  This class over all is
@@ -45,6 +47,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 DialogBacktrace::DialogBacktrace(QWidget *parent) : QDialog(parent), ui(new Ui::DialogBacktrace) {
 	ui->setupUi(this);
 	table_ = ui->tableWidgetCallStack;
+	
+	
+	table_->verticalHeader()->hide();
+#if QT_VERSION >= 0x050000
+	table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+#else
+	table_->horizontalHeader()->setResizeMode(QHeaderView::ResizeToContents);
+#endif
 }
 
 DialogBacktrace::~DialogBacktrace() {
@@ -118,9 +128,8 @@ void DialogBacktrace::populate_table() {
 		for (int j = 0; j < stack_entry.size() && j < table_->columnCount(); j++) {
 
 			//Turn the address into a string prefixed with "0x"
-			int base = 16;
-			QTableWidgetItem *item = new QTableWidgetItem;
-			item->setText(QString("0x") + QString::number(stack_entry.at(j), base));
+			auto item = new QTableWidgetItem;
+			item->setText(QString("0x%1").arg(QString::number(stack_entry.at(j), 16)));
 
 			//Remove all flags (namely Edit), then put the flags that we want.
 			Qt::ItemFlags flags = Qt::NoItemFlags;
@@ -179,7 +188,7 @@ void DialogBacktrace::on_tableWidgetCallStack_itemDoubleClicked(QTableWidgetItem
 //------------------------------------------------------------------------------
 void DialogBacktrace::on_tableWidgetCallStack_cellClicked(int row, int column)
 {
-	row = row;	//Not used, and the warning is annoying.
+	Q_UNUSED(row);
 
 	QPushButton *return_to = ui->pushButtonReturnTo;
 	if (is_ret(column)) {
@@ -206,28 +215,29 @@ void DialogBacktrace::on_pushButtonReturnTo_clicked()
 	//If we didn't get a valid address, then fail.
 	//TODO: Make sure "ok" actually signifies success of getting an address...
 	if (!ok) {
-		int base = 16;
-		QString msg("Could not return to 0x%x" + QString::number(address, base));
-		QMessageBox::information( this,	"Error", msg);
+		QMessageBox::information(this, tr("Error"), tr("Could not return to 0x%1").arg(QString::number(address, 16)));
 		return;
 	}
+	
+	if(IProcess *process = edb::v1::debugger_core->process()) {
 
-	//Now that we got the address, we can run.  First check if bp @ that address
-	//already exists.
-	IBreakpoint::pointer bp = edb::v1::debugger_core->find_breakpoint(address);
-	if (bp) {
-		edb::v1::debugger_core->resume(edb::DEBUG_CONTINUE);
-		return;
-	}
+		//Now that we got the address, we can run.  First check if bp @ that address
+		//already exists.
+		IBreakpoint::pointer bp = edb::v1::debugger_core->find_breakpoint(address);
+		if (bp) {
+			process->resume(edb::DEBUG_CONTINUE);
+			return;
+		}
 
-	//Using the non-debugger_core version ensures bp is set in a valid region
-	edb::v1::create_breakpoint(address);
-	bp = edb::v1::debugger_core->find_breakpoint(address);
-	if (bp) {
-		bp->set_internal(true);
-		bp->set_one_time(true);
-		edb::v1::debugger_core->resume(edb::DEBUG_CONTINUE);
-		return;
+		//Using the non-debugger_core version ensures bp is set in a valid region
+		edb::v1::create_breakpoint(address);
+		bp = edb::v1::debugger_core->find_breakpoint(address);
+		if (bp) {
+			bp->set_internal(true);
+			bp->set_one_time(true);
+			process->resume(edb::DEBUG_CONTINUE);
+			return;
+		}
 	}
 
 
@@ -263,4 +273,6 @@ edb::address_t DialogBacktrace::address_from_table(bool *ok, const QTableWidgetI
 	ExpressionError err;
 	const edb::address_t address = expr.evaluate_expression(ok, &err);
 	return address;
+}
+
 }

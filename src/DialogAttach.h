@@ -1,6 +1,6 @@
 /*
-Copyright (C) 2006 - 2014 Evan Teran
-                          eteran@alum.rit.edu
+Copyright (C) 2006 - 2015 Evan Teran
+                          evan.teran@gmail.com
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -42,6 +42,7 @@ private:
 
 public Q_SLOTS:
 	void on_filter_uid_clicked(bool checked);
+	void on_filter_textChanged(const QString &filter);
 
 public:
 	edb::pid_t selected_pid(bool *ok) const;
@@ -49,7 +50,8 @@ public:
 private:
 	Ui::DialogAttach *const ui;
 	ProcessModel          *process_model_;
-	QSortFilterProxyModel *process_filter_;
+	QSortFilterProxyModel *process_name_filter_;
+	QSortFilterProxyModel *process_pid_filter_;
 };
 
 #endif

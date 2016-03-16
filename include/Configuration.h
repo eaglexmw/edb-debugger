@@ -1,6 +1,6 @@
 /*
-Copyright (C) 2006 - 2014 Evan Teran
-                          eteran@alum.rit.edu
+Copyright (C) 2006 - 2015 Evan Teran
+                          evan.teran@gmail.com
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -65,6 +65,7 @@ public:
 	bool              warn_on_no_exec_bp;
 	bool              find_main;
 	bool              tty_enabled;
+	bool              remove_stale_symbols;
 	QString           tty_command;
 
 	// disassembly tab
@@ -79,6 +80,9 @@ public:
 	QString           session_path;
 
 	int               min_string_length;
+
+	// Exceptions tab
+	bool			  enable_signals_message_box;
 
 protected:
 	void read_settings();
